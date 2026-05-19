@@ -22,8 +22,9 @@ MDS_ROOT="${MDS_ROOT:-/data/mihir-stuff/FOMO300/mds}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$PROJECT_DIR/data}"
 TASK_NAME="${TASK_NAME:-PT901_FOMO300_MDS}"
 SPLIT_NAME="${SPLIT_NAME:-split_mihir_90_10}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/uv-cache}"
 
-mkdir -p "$OUTPUT_ROOT"
+mkdir -p "$OUTPUT_ROOT" "$UV_CACHE_DIR"
 
 echo "Job id: ${SLURM_JOB_ID:-local}"
 echo "Node list: ${SLURM_JOB_NODELIST:-local}"

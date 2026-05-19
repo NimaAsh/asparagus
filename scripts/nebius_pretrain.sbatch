@@ -2,10 +2,11 @@
 #SBATCH --job-name=asp-pretrain
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=16
 #SBATCH --gpus-per-task=1
 #SBATCH --time=24:00:00
-#SBATCH --partition=main
+#SBATCH --partition=n
 #SBATCH --account=training
 #SBATCH --qos=low
 #SBATCH --requeue
@@ -30,13 +31,15 @@ export ASPARAGUS_MODELS="${ASPARAGUS_MODELS:-$PROJECT_DIR/models}"
 export ASPARAGUS_RESULTS="${ASPARAGUS_RESULTS:-$PROJECT_DIR/results}"
 export ASPARAGUS_RAW_LABELS="${ASPARAGUS_RAW_LABELS:-$PROJECT_DIR/raw_labels}"
 export WANDB_DIR="${WANDB_DIR:-$PROJECT_DIR/wandb}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/uv-cache}"
 
 mkdir -p \
   "$ASPARAGUS_DATA" \
   "$ASPARAGUS_MODELS" \
   "$ASPARAGUS_RESULTS" \
   "$ASPARAGUS_RAW_LABELS" \
-  "$WANDB_DIR"
+  "$WANDB_DIR" \
+  "$UV_CACHE_DIR"
 
 echo "Job id: ${SLURM_JOB_ID:-local}"
 echo "Node list: ${SLURM_JOB_NODELIST:-local}"

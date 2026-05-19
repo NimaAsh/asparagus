@@ -52,7 +52,7 @@ def as_image_tensor(sample: dict, sample_idx: int, preserve_dtype: bool) -> torc
         keys = ", ".join(sorted(sample.keys()))
         raise KeyError(f"MDS sample {sample_idx} has no 'image' field. Available keys: {keys}")
 
-    image = torch.as_tensor(sample["image"])
+    image = torch.as_tensor(sample["image"]).clone()
     if image.ndim == 3:
         image = image.unsqueeze(0)
     if image.ndim != 4:

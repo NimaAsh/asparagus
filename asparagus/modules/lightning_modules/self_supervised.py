@@ -146,11 +146,9 @@ class SelfSupervisedModule(BaseModule):
 
     def _rec_loss(self, pred, y, mask=None):
         if mask is not None:
-            y_masked = y.clone()
-            pred_masked = pred.clone()
-            y_masked[~mask] = 0
-            pred_masked[~mask] = 0
-            return self._rec_loss_fn(pred_masked, y_masked)
+            hidden = ~mask
+            if hidden.any():
+                return self._rec_loss_fn(pred[hidden], y[hidden])
 
         return self._rec_loss_fn(pred, y)
 

@@ -83,17 +83,18 @@ def compute_ssim_3d(
 
     # Also compute SSIM for masked region only if mask is provided
     if mask is not None:
-        # Apply mask and compute SSIM on masked region
-        pred_masked = pred * mask
-        target_masked = target * mask
+        hidden = ~mask
+        hidden_values = hidden.to(dtype=pred.dtype)
+        pred_masked = pred * hidden_values
+        target_masked = target * hidden_values
 
         ssim_masked_values = []
         for idx in slice_indices:
             slice_pred = pred_masked[:, :, idx, :, :].squeeze(1)
             slice_target = target_masked[:, :, idx, :, :].squeeze(1)
-            slice_mask = mask[:, :, idx, :, :].squeeze(1)
+            slice_mask = hidden[:, :, idx, :, :].squeeze(1)
 
-            if slice_mask.sum() > 0:  # Only compute if there are masked pixels
+            if slice_mask.sum() > 0:
                 if slice_pred.dim() == 3:
                     slice_pred = slice_pred.unsqueeze(1)
                     slice_target = slice_target.unsqueeze(1)
@@ -193,10 +194,12 @@ def compute_frequency_domain_error(
     if pred is None or target is None:
         return metrics
 
-    # Apply mask if provided
+    # Apply the hidden region if a visible-token mask is provided.
     if mask is not None:
-        pred = pred * mask
-        target = target * mask
+        hidden = ~mask
+        hidden_values = hidden.to(dtype=pred.dtype)
+        pred = pred * hidden_values
+        target = target * hidden_values
 
     # Convert to float32 for FFT (BFloat16 not supported)
     pred = pred.float()

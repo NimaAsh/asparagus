@@ -35,8 +35,11 @@ echo "Split name: $SPLIT_NAME"
 cd "$REPO_DIR"
 
 if command -v uv >/dev/null 2>&1; then
-  export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PROJECT_DIR/venvs/asparagus}"
-  uv run --with mosaicml-streaming python asparagus/scripts/mds_to_asparagus_pretrain.py \
+  export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PROJECT_DIR/venvs/mds-convert}"
+  uv run --no-project \
+    --with torch==2.6.0 \
+    --with mosaicml-streaming \
+    python asparagus/scripts/mds_to_asparagus_pretrain.py \
     --mds-root "$MDS_ROOT" \
     --output-root "$OUTPUT_ROOT" \
     --task-name "$TASK_NAME" \

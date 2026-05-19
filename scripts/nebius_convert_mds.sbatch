@@ -43,8 +43,18 @@ if command -v uv >/dev/null 2>&1; then
     --split-name "$SPLIT_NAME" \
     "$@"
 else
-  python -m pip install mosaicml-streaming
-  python asparagus/scripts/mds_to_asparagus_pretrain.py \
+  PYTHON_BIN="${PYTHON_BIN:-}"
+  if [[ -z "$PYTHON_BIN" ]]; then
+    PYTHON_BIN="$(command -v python3 || command -v python || true)"
+  fi
+  if [[ -z "$PYTHON_BIN" ]]; then
+    echo "ERROR: neither uv nor python/python3 is available on PATH." >&2
+    echo "Load a Python module, install uv, or run this job in a Python container." >&2
+    exit 127
+  fi
+
+  "$PYTHON_BIN" -m pip install mosaicml-streaming
+  "$PYTHON_BIN" asparagus/scripts/mds_to_asparagus_pretrain.py \
     --mds-root "$MDS_ROOT" \
     --output-root "$OUTPUT_ROOT" \
     --task-name "$TASK_NAME" \

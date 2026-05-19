@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=16
 #SBATCH --gpus-per-task=1
-#SBATCH --time=24:00:00
+#SBATCH --time=00:45:00
 #SBATCH --partition=n
 #SBATCH --account=training
 #SBATCH --qos=low

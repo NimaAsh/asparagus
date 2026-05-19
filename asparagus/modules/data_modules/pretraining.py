@@ -53,7 +53,7 @@ class PretrainDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             batch_size=self.batch_size,
             pin_memory=False,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             drop_last=True,
             sampler=sampler,
         )
@@ -69,7 +69,7 @@ class PretrainDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             pin_memory=False,
             shuffle=False,
-            persistent_workers=True,
+            persistent_workers=self.num_workers > 0,
             drop_last=True,
             sampler=sampler,
         )

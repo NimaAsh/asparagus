@@ -21,8 +21,9 @@ class ProfilerCallback(Callback):
         profile_every_n_steps: How often to profile (default: 100)\
     """
 
-    def __init__(self, profile_every_n_steps: int = 100):
+    def __init__(self, profile_every_n_steps: int = 100, warmup_steps: int = 10):
         self.profile_every_n_steps = profile_every_n_steps
+        self.warmup_steps = warmup_steps
         self.profiler: Optional[profile] = None
         self.step_count = 0
 
@@ -31,7 +32,7 @@ class ProfilerCallback(Callback):
         self.step_count += 1
 
         # Skip warmup steps and only profile at intervals
-        if batch_idx % self.profile_every_n_steps == 0:
+        if self.step_count > self.warmup_steps and batch_idx % self.profile_every_n_steps == 0:
             activities = [ProfilerActivity.CPU]
             if torch.cuda.is_available():
                 activities.append(ProfilerActivity.CUDA)

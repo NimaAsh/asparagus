@@ -88,6 +88,6 @@ training:
 profiler:
   enabled: false
   _callback:
-    _target_: asparagus.modules.callbacks.ProfileCallback
-    profile_every_n_steps: 500
-    warmup_steps: 10
+    _target_: asparagus.modules.callbacks.ProfilerCallback
+    profile_every_n_steps: ${profiler.profile_every_n_steps}
+    warmup_steps: ${profiler.warmup_steps}

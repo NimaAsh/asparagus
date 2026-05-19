@@ -1,0 +1,42 @@
+# @package _global_
+defaults:
+  - /default_pretrain
+  - /model/unet_b_lw_dec@model
+  - /hardware/1gpu12cpu@hardware
+  - _self_
+
+task: PT901_FOMO300_MDS
+root: fomo26
+stem: pretrain
+
+checkpoint_run_id:
+
+data:
+  train_split: split_mihir_90_10
+  fold: 0
+
+training:
+  batch_size: 2
+  accumulate_grad_batches: 1
+  patch_size: [96, 96, 96]
+  mask_ratio: 0.6
+  max_samples: 8192
+  steps_per_epoch: 256
+  val_steps_per_epoch: 16
+  warmup_ratio: 0.1
+  check_val_every_n_epoch: 1
+  rec_loss_masked_only: true
+
+model:
+  ckpt_every_n_epoch: 1
+
+logger:
+  wandb_logging: true
+  mlflow_logging: false
+  log_every_n_steps: 10
+  log_images_every_n_epoch: 1
+
+profiler:
+  enabled: true
+  profile_every_n_steps: 50
+  warmup_steps: 5

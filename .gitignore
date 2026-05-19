@@ -1,6 +1,9 @@
 # Asparagus files
 lightning_logs/
 wandb
+slurms/
+*.out
+*.err
 
 # macos
 .DS_Store

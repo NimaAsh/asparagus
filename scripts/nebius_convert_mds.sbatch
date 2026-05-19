@@ -2,10 +2,11 @@
 #SBATCH --job-name=asp-convert-mds
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=12:00:00
-#SBATCH --partition=main
+#SBATCH --partition=n
 #SBATCH --account=training
 #SBATCH --qos=low
 #SBATCH --output=slurms/%j.out

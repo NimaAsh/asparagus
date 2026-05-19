@@ -93,11 +93,7 @@ class ProfilerCallback(Callback):
                 # Check if event name matches any pattern
                 event_name_lower = event.key.lower()
                 if any(pattern.lower() in event_name_lower for pattern in patterns):
-                    # Use CUDA time if available, otherwise CPU time
-                    if torch.cuda.is_available() and event.cuda_time_total > 0:
-                        total_time += event.cuda_time_total
-                    else:
-                        total_time += event.cpu_time_total
+                    total_time += self._event_time_total(event)
 
             # Convert from microseconds to seconds
             metrics[f"{metric_name}_time"] = total_time / 1_000_000.0
@@ -105,7 +101,7 @@ class ProfilerCallback(Callback):
         # Calculate total step time
         total_step_time = (
             sum(
-                event.cuda_time_total if torch.cuda.is_available() and event.cuda_time_total > 0 else event.cpu_time_total
+                self._event_time_total(event)
                 for event in key_averages
             )
             / 1_000_000.0
@@ -125,3 +121,12 @@ class ProfilerCallback(Callback):
             metrics["gpu_memory_reserved_gb"] = torch.cuda.memory_reserved() / 1e9
 
         return metrics
+
+    @staticmethod
+    def _event_time_total(event: Any) -> float:
+        """Return device time when available, otherwise CPU time, in microseconds."""
+        for attr in ("cuda_time_total", "device_time_total", "self_cuda_time_total", "self_device_time_total"):
+            value = getattr(event, attr, 0.0)
+            if value > 0:
+                return value
+        return getattr(event, "cpu_time_total", 0.0)

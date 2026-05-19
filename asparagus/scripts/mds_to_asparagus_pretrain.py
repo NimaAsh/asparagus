@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-split", default="val", help="MDS split name for validation.")
     parser.add_argument("--split-name", default="split_mihir_90_10", help="Asparagus split JSON stem.")
     parser.add_argument("--remote", default=None, help="Optional remote MDS root, e.g. s3://bucket/path.")
+    parser.add_argument("--batch-size", type=int, default=1, help="StreamingDataset batch size for deterministic iteration.")
     parser.add_argument("--limit-train", type=int, default=None, help="Optional max train samples to convert.")
     parser.add_argument("--limit-val", type=int, default=None, help="Optional max val samples to convert.")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing tensors.")
@@ -32,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def make_dataset(local: Path, split: str, remote: str | None):
+def make_dataset(local: Path, split: str, remote: str | None, batch_size: int):
     try:
         from streaming import StreamingDataset
     except ImportError as exc:
@@ -40,7 +41,7 @@ def make_dataset(local: Path, split: str, remote: str | None):
             "Missing dependency 'mosaicml-streaming'. Install it in the environment used for conversion."
         ) from exc
 
-    kwargs = {"local": str(local), "split": split, "shuffle": False}
+    kwargs = {"local": str(local), "split": split, "shuffle": False, "batch_size": batch_size}
     if remote:
         kwargs["remote"] = remote
     return StreamingDataset(**kwargs)
@@ -96,8 +97,8 @@ def main() -> None:
     task_dir = args.output_root / args.task_name
     task_dir.mkdir(parents=True, exist_ok=True)
 
-    train_dataset = make_dataset(args.mds_root, args.train_split, args.remote)
-    val_dataset = make_dataset(args.mds_root, args.val_split, args.remote)
+    train_dataset = make_dataset(args.mds_root, args.train_split, args.remote, args.batch_size)
+    val_dataset = make_dataset(args.mds_root, args.val_split, args.remote, args.batch_size)
 
     train_paths = convert_split(
         train_dataset,

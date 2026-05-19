@@ -49,6 +49,58 @@ echo "Project dir: $PROJECT_DIR"
 echo "ASPARAGUS_DATA: $ASPARAGUS_DATA"
 echo "ASPARAGUS_MODELS: $ASPARAGUS_MODELS"
 
+TELEMETRY_PREFIX="slurms/${SLURM_JOB_ID:-local}"
+TELEMETRY_INTERVAL="${ASPARAGUS_TELEMETRY_INTERVAL:-5}"
+TELEMETRY_PIDS=()
+
+start_telemetry() {
+  if [[ "${ASPARAGUS_TELEMETRY:-1}" != "1" ]]; then
+    echo "Telemetry disabled"
+    return
+  fi
+
+  echo "Telemetry prefix: $TELEMETRY_PREFIX"
+  echo "Telemetry interval: ${TELEMETRY_INTERVAL}s"
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi --query-gpu=timestamp,index,name,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw,power.limit,clocks.sm,clocks.mem,temperature.gpu --format=csv,nounits -l "$TELEMETRY_INTERVAL" \
+      > "${TELEMETRY_PREFIX}_gpu.csv" 2> "${TELEMETRY_PREFIX}_gpu.err" &
+    TELEMETRY_PIDS+=("$!")
+
+    nvidia-smi dmon -s pucvmt -d "$TELEMETRY_INTERVAL" -o DT \
+      > "${TELEMETRY_PREFIX}_gpu_dmon.log" 2> "${TELEMETRY_PREFIX}_gpu_dmon.err" &
+    TELEMETRY_PIDS+=("$!")
+
+    nvidia-smi topo -m > "${TELEMETRY_PREFIX}_gpu_topo.txt" 2> "${TELEMETRY_PREFIX}_gpu_topo.err" || true
+  else
+    echo "nvidia-smi not found; GPU telemetry disabled"
+  fi
+
+  if command -v vmstat >/dev/null 2>&1; then
+    vmstat -t "$TELEMETRY_INTERVAL" \
+      > "${TELEMETRY_PREFIX}_vmstat.log" 2> "${TELEMETRY_PREFIX}_vmstat.err" &
+    TELEMETRY_PIDS+=("$!")
+  else
+    echo "vmstat not found; CPU/memory telemetry disabled"
+  fi
+
+  if command -v iostat >/dev/null 2>&1; then
+    iostat -xz -t "$TELEMETRY_INTERVAL" \
+      > "${TELEMETRY_PREFIX}_iostat.log" 2> "${TELEMETRY_PREFIX}_iostat.err" &
+    TELEMETRY_PIDS+=("$!")
+  else
+    echo "iostat not found; disk telemetry disabled"
+  fi
+}
+
+stop_telemetry() {
+  if [[ "${#TELEMETRY_PIDS[@]}" -gt 0 ]]; then
+    kill "${TELEMETRY_PIDS[@]}" >/dev/null 2>&1 || true
+  fi
+}
+
+trap stop_telemetry EXIT
+
 run_asparagus() {
   cd "$REPO_DIR"
 
@@ -67,6 +119,8 @@ run_asparagus() {
 }
 
 export -f run_asparagus
+
+start_telemetry
 
 if [[ -n "${ASPARAGUS_CONTAINER_IMAGE:-}" && -z "${ASPARAGUS_INSIDE_CONTAINER:-}" ]]; then
   export ASPARAGUS_INSIDE_CONTAINER=1

@@ -39,7 +39,16 @@ echo "==> Target python: $VENV_PY"
 # `--python "$VENV_PY"` pins the install to *that* env and bypasses uv's
 # auto-discovery (which prefers a local `.venv` or another project env).
 uv pip install --python "$VENV_PY" --no-deps mosaicml-streaming
-uv pip install --python "$VENV_PY" --no-deps xxhash zstandard
+# Real runtime deps of `streaming.base.*` that have no version conflicts with
+# asparagus' pins (these are pure-python or have manylinux wheels with no
+# system-library requirement):
+#   xxhash     - shard hash validation
+#   zstandard  - kept for parity (not the same module as `zstd` below; we stub
+#                that one because `zstd` PyPI package is the legacy binding
+#                streaming.base.compression eagerly imports).
+#   catalogue  - dataset registry used by streaming.base.registry_utils
+#   filelock   - shard caching lock (almost always already installed by huggingface-hub)
+uv pip install --python "$VENV_PY" --no-deps xxhash zstandard catalogue filelock
 
 # `streaming.base.dataloader` does an eager top-level
 # `from transformers.feature_extraction_utils import BatchFeature`, so the
@@ -116,6 +125,76 @@ class BatchEncoding(dict):
 PY
 
 echo "    Wrote shim to $TRANSFORMERS_DIR (BatchFeature + BatchEncoding)"
+
+# `streaming/base/compression.py` does `import brotli; import snappy; import zstd`
+# at module load time. We never write or decompress shards with these
+# algorithms (our FOMO300 shards are uncompressed), so installing real
+# packages just to satisfy the imports is wasteful and `python-snappy`
+# additionally needs a system libsnappy-dev that isn't on every node.
+# Stub them out as no-op modules with compress/decompress functions that
+# raise if anyone actually calls them.
+echo "==> Writing compression shims (brotli, snappy, zstd)"
+for mod in brotli snappy zstd; do
+    cat > "$SITE/${mod}.py" <<PY
+"""Stub for the '$mod' module so streaming.base.compression can import.
+
+We only read uncompressed MDS shards; this module's compress()/decompress()
+are never called by our code path. They raise to make accidental use loud.
+"""
+
+
+def compress(data, *args, **kwargs):
+    raise NotImplementedError(
+        "$mod is a stubbed module in this env (no real compression library). "
+        "Install the real package if you need shard (de)compression."
+    )
+
+
+def decompress(data, *args, **kwargs):
+    raise NotImplementedError(
+        "$mod is a stubbed module in this env (no real compression library). "
+        "Install the real package if you need shard (de)compression."
+    )
+PY
+done
+echo "    Wrote $SITE/{brotli,snappy,zstd}.py"
+
+# `streaming/__init__.py` eagerly imports streaming.multimodal, streaming.text,
+# streaming.vision. text.c4 imports `transformers.models.auto.tokenization_auto`
+# (not in our shim), vision imports PIL/torchvision-internal stuff, etc. None
+# of those subpackages are needed for plain `StreamingDataset` over local MDS
+# shards. Replace the top-level __init__.py with a minimal version that just
+# re-exports the symbols we (or anything that imports our module) use.
+STREAMING_INIT="$SITE/streaming/__init__.py"
+if [[ -f "$STREAMING_INIT" ]]; then
+    STREAMING_INIT_BAK="${STREAMING_INIT}.asparagus-bak"
+    if [[ ! -f "$STREAMING_INIT_BAK" ]]; then
+        cp "$STREAMING_INIT" "$STREAMING_INIT_BAK"
+        echo "==> Backed up original streaming/__init__.py to $STREAMING_INIT_BAK"
+    fi
+    cat > "$STREAMING_INIT" <<'PY'
+"""Minimal streaming/__init__.py for asparagus pretraining.
+
+The upstream version eagerly imports streaming.multimodal, streaming.text,
+and streaming.vision, which transitively require AutoTokenizer, PIL, and
+several other packages we do not install. We only need StreamingDataset
+(and StreamingDataLoader for API surface), so re-export just those.
+
+Original file is preserved at __init__.py.asparagus-bak.
+"""
+
+from streaming.base.dataset import StreamingDataset
+from streaming.base.dataloader import StreamingDataLoader
+
+try:
+    from streaming._version import __version__
+except Exception:
+    __version__ = "0.0.0+asparagus-minimal"
+
+__all__ = ["StreamingDataset", "StreamingDataLoader"]
+PY
+    echo "==> Rewrote $STREAMING_INIT (multimodal/text/vision skipped)"
+fi
 
 echo "==> Smoke test"
 "$VENV_PY" - <<'PY'

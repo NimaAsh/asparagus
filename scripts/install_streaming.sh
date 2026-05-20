@@ -43,11 +43,55 @@ uv pip install --python "$VENV_PY" --no-deps xxhash zstandard
 
 # `streaming.base.dataloader` does an eager top-level
 # `from transformers.feature_extraction_utils import BatchFeature`, so the
-# transformers package has to be importable even though we never use it.
-# Installing with --no-deps keeps it from dragging in older huggingface-hub
-# (<1.0) and numpy (<2.0). Tokenizers/safetensors are pure-Rust wheels and
-# transformers degrades gracefully if either is missing for our usage.
-uv pip install --python "$VENV_PY" --no-deps transformers
+# `transformers` namespace has to exist with that one symbol. Installing
+# real transformers with --no-deps fails because transformers internals
+# eagerly import `regex`, then `tokenizers`, then `safetensors`, etc.
+# Installing with deps re-introduces the huggingface-hub<1.0 / numpy<2.0
+# conflicts. Since we never call BatchFeature ourselves (we only use
+# StreamingDataset, not StreamingDataLoader), the simplest fix is to vendor
+# a one-file shim of `transformers.feature_extraction_utils.BatchFeature`
+# into the venv's site-packages. If a real transformers is already there
+# (e.g. from a previous attempt), remove it first so the shim wins.
+echo "==> Removing any existing real transformers install (the shim replaces it)"
+uv pip uninstall --python "$VENV_PY" transformers >/dev/null 2>&1 || true
+
+SITE="$("$VENV_PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+TRANSFORMERS_DIR="$SITE/transformers"
+mkdir -p "$TRANSFORMERS_DIR"
+
+cat > "$TRANSFORMERS_DIR/__init__.py" <<'PY'
+"""Minimal shim of the transformers namespace.
+
+Asparagus + mosaicml-streaming usage only requires that
+`transformers.feature_extraction_utils.BatchFeature` exist as an importable
+symbol. We never instantiate it. This package shim exists so the eager
+import in `streaming.base.dataloader` does not fail.
+"""
+
+from . import feature_extraction_utils  # noqa: F401
+
+__all__ = ["feature_extraction_utils"]
+__version__ = "0.0.0+asparagus-shim"
+PY
+
+cat > "$TRANSFORMERS_DIR/feature_extraction_utils.py" <<'PY'
+"""Stub for `transformers.feature_extraction_utils.BatchFeature`.
+
+Imported by `streaming.base.dataloader` at module load time, never actually
+used by `streaming.StreamingDataset`. Defined as a thin dict subclass so
+isinstance checks behave plausibly if anything else looks at it.
+"""
+
+from typing import Any, Optional
+
+
+class BatchFeature(dict):
+    def __init__(self, data: Optional[dict] = None, tensor_type: Any = None):
+        super().__init__(data or {})
+        self.tensor_type = tensor_type
+PY
+
+echo "    Wrote shim to $TRANSFORMERS_DIR"
 
 echo "==> Smoke test"
 "$VENV_PY" - <<'PY'

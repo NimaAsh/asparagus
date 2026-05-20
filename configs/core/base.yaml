@@ -20,14 +20,23 @@ hydra:
           - hardware.num_workers
           - hardware.precision
           - hardware.strategy
+          - logger.log_images_every_n_epoch
+          - logger.wandb_logging
           - load_checkpoint_name
           - model
           - model.net
           - model.dimensions
+          - model.use_skip_connections
+          - profiler.enabled
           - root
           - run_id
           - stem
           - task
+          - training.batch_size
+          - training.max_samples
+          - training.steps_per_epoch
+          - training.val_steps_per_epoch
+          - training.warmup_ratio
 
   output_subdir: hydra
   run:

@@ -8,7 +8,9 @@
 #SBATCH --time=00:45:00
 #SBATCH --partition=n
 #SBATCH --account=training
-#SBATCH --qos=low
+# `normal` priority by default; pass `--qos=low` on the sbatch CLI to be
+# polite when the cluster is busy or when running long throwaway probes.
+#SBATCH --qos=normal
 #SBATCH --requeue
 #SBATCH --output=slurms/%j.out
 #SBATCH --error=slurms/%j.err

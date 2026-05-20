@@ -62,25 +62,27 @@ mkdir -p "$TRANSFORMERS_DIR"
 cat > "$TRANSFORMERS_DIR/__init__.py" <<'PY'
 """Minimal shim of the transformers namespace.
 
-Asparagus + mosaicml-streaming usage only requires that
-`transformers.feature_extraction_utils.BatchFeature` exist as an importable
-symbol. We never instantiate it. This package shim exists so the eager
-import in `streaming.base.dataloader` does not fail.
+Asparagus + mosaicml-streaming 0.13 only need two symbols from transformers,
+both used in an `isinstance(batch, (dict, BatchEncoding, BatchFeature))`
+check inside `streaming.base.dataloader.StreamingDataLoader`:
+
+* transformers.feature_extraction_utils.BatchFeature
+* transformers.tokenization_utils_base.BatchEncoding
+
+We never use StreamingDataLoader ourselves (we use StreamingDataset), so
+these are pure dict subclasses. This shim exists so the eager imports at
+the top of streaming.base.dataloader do not fail.
 """
 
 from . import feature_extraction_utils  # noqa: F401
+from . import tokenization_utils_base  # noqa: F401
 
-__all__ = ["feature_extraction_utils"]
+__all__ = ["feature_extraction_utils", "tokenization_utils_base"]
 __version__ = "0.0.0+asparagus-shim"
 PY
 
 cat > "$TRANSFORMERS_DIR/feature_extraction_utils.py" <<'PY'
-"""Stub for `transformers.feature_extraction_utils.BatchFeature`.
-
-Imported by `streaming.base.dataloader` at module load time, never actually
-used by `streaming.StreamingDataset`. Defined as a thin dict subclass so
-isinstance checks behave plausibly if anything else looks at it.
-"""
+"""Stub for `transformers.feature_extraction_utils.BatchFeature`."""
 
 from typing import Any, Optional
 
@@ -91,7 +93,29 @@ class BatchFeature(dict):
         self.tensor_type = tensor_type
 PY
 
-echo "    Wrote shim to $TRANSFORMERS_DIR"
+cat > "$TRANSFORMERS_DIR/tokenization_utils_base.py" <<'PY'
+"""Stub for `transformers.tokenization_utils_base.BatchEncoding`."""
+
+from typing import Any, Optional
+
+
+class BatchEncoding(dict):
+    def __init__(
+        self,
+        data: Optional[dict] = None,
+        encoding: Any = None,
+        tensor_type: Any = None,
+        prepend_batch_axis: bool = False,
+        n_sequences: Optional[int] = None,
+    ):
+        super().__init__(data or {})
+        self.encodings = encoding
+        self.tensor_type = tensor_type
+        self.prepend_batch_axis = prepend_batch_axis
+        self.n_sequences = n_sequences
+PY
+
+echo "    Wrote shim to $TRANSFORMERS_DIR (BatchFeature + BatchEncoding)"
 
 echo "==> Smoke test"
 "$VENV_PY" - <<'PY'

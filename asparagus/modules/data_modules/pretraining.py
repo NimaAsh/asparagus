@@ -52,7 +52,7 @@ class PretrainDataModule(pl.LightningDataModule):
             "persistent_workers": self.num_workers > 0,
         }
         if self.num_workers > 0:
-            kwargs["prefetch_factor"] = 4
+            kwargs["prefetch_factor"] = 8
         return kwargs
 
     def train_dataloader(self):

@@ -41,6 +41,14 @@ echo "==> Target python: $VENV_PY"
 uv pip install --python "$VENV_PY" --no-deps mosaicml-streaming
 uv pip install --python "$VENV_PY" --no-deps xxhash zstandard
 
+# `streaming.base.dataloader` does an eager top-level
+# `from transformers.feature_extraction_utils import BatchFeature`, so the
+# transformers package has to be importable even though we never use it.
+# Installing with --no-deps keeps it from dragging in older huggingface-hub
+# (<1.0) and numpy (<2.0). Tokenizers/safetensors are pure-Rust wheels and
+# transformers degrades gracefully if either is missing for our usage.
+uv pip install --python "$VENV_PY" --no-deps transformers
+
 echo "==> Smoke test"
 "$VENV_PY" - <<'PY'
 from streaming import StreamingDataset

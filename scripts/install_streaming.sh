@@ -56,13 +56,15 @@ uv pip install --python "$VENV_PY" --no-deps mosaicml-streaming
 #   Brotli         - eagerly imported by streaming.base.compression and
 #                    probed by fsspec.compression.
 #   python-snappy  - eagerly imported by streaming.base.compression and
-#                    probed by fsspec.compression. Wheel bundles libsnappy
-#                    so no system libsnappy-dev needed.
+#                    probed by fsspec.compression. 0.7.x switched its
+#                    backend from libsnappy to cramjam, so we install
+#                    cramjam too (pure-Rust manylinux wheels, no deps).
+#   cramjam        - Rust-based compression backend for python-snappy >=0.7.
 #   catalogue      - dataset registry used by streaming.base.registry_utils.
 #   filelock       - shard caching lock (usually already installed by
 #                    huggingface-hub but explicit-is-better).
 uv pip install --python "$VENV_PY" --no-deps \
-    xxhash zstandard zstd Brotli python-snappy catalogue filelock
+    xxhash zstandard zstd Brotli python-snappy cramjam catalogue filelock
 
 # `streaming.base.dataloader` does an eager top-level
 # `from transformers.feature_extraction_utils import BatchFeature`, so the

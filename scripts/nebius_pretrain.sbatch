@@ -27,6 +27,13 @@ fi
 REPO_DIR="${REPO_DIR:-$PWD}"
 PROJECT_DIR="${PROJECT_DIR:-/data/$USER/asparagus}"
 
+# Force `import asparagus` to resolve to the branch we submitted from,
+# regardless of which checkout `uv pip install -e .` was last run from
+# (running it twice from different worktrees silently re-points the
+# editable install, so we cannot rely on it). Prepending $REPO_DIR to
+# PYTHONPATH wins over the site-packages .pth entry.
+export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+
 export ASPARAGUS_CONFIGS="${ASPARAGUS_CONFIGS:-$REPO_DIR/configs}"
 export ASPARAGUS_DATA="${ASPARAGUS_DATA:-$PROJECT_DIR/data}"
 export ASPARAGUS_MODELS="${ASPARAGUS_MODELS:-$PROJECT_DIR/models}"

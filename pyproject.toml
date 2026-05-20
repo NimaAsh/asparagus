@@ -56,11 +56,12 @@ extras = [
     "timm<=1.0.14",
     "gardening_tools[extras]>=0.1.1",
 ]
-# Streaming pretraining over MDS shards (mosaicml-streaming). Optional so
-# users who only ever use the .pt-file PretrainDataModule do not need it.
-streaming = [
-    "mosaicml-streaming>=0.7.5",
-]
+# `mosaicml-streaming` is NOT listed as a normal extra because its hard pin
+# on `transformers<5` transitively forces `huggingface-hub<1.0` and
+# `numpy<2.0`, which conflict with our pins. Our data module only uses
+# `streaming.StreamingDataset` (the core indexed reader), so install it
+# post-sync via `scripts/install_streaming.sh` which does
+# `uv pip install --no-deps mosaicml-streaming xxhash zstandard`.
 test = [
     "ruff>=0.14.8",
     "pytest>=9.0.1"

@@ -43,6 +43,18 @@ class PretrainDataModule(pl.LightningDataModule):
         self.train_dataset = PretrainDataset(self.train_split, transforms=self.train_transforms)
         self.val_dataset = PretrainDataset(self.val_split, transforms=self.val_transforms)
 
+    def _loader_kwargs(self):
+        # `prefetch_factor` is only accepted by DataLoader when num_workers > 0.
+        # `pin_memory` is a strict improvement on CUDA hosts and is harmless
+        # otherwise (PyTorch silently no-ops on CPU-only setups).
+        kwargs = {
+            "pin_memory": True,
+            "persistent_workers": self.num_workers > 0,
+        }
+        if self.num_workers > 0:
+            kwargs["prefetch_factor"] = 4
+        return kwargs
+
     def train_dataloader(self):
         sampler = RandomSampler(self.train_dataset, num_samples=999999, replacement=True)
         if dist.is_initialized():
@@ -52,10 +64,9 @@ class PretrainDataModule(pl.LightningDataModule):
             self.train_dataset,
             num_workers=self.num_workers,
             batch_size=self.batch_size,
-            pin_memory=False,
-            persistent_workers=self.num_workers > 0,
             drop_last=True,
             sampler=sampler,
+            **self._loader_kwargs(),
         )
 
     def val_dataloader(self):
@@ -67,11 +78,10 @@ class PretrainDataModule(pl.LightningDataModule):
             self.val_dataset,
             num_workers=self.num_workers,
             batch_size=self.batch_size,
-            pin_memory=False,
             shuffle=False,
-            persistent_workers=self.num_workers > 0,
             drop_last=True,
             sampler=sampler,
+            **self._loader_kwargs(),
         )
 
 

@@ -146,9 +146,18 @@ class SelfSupervisedModule(BaseModule):
 
     def _rec_loss(self, pred, y, mask=None):
         if mask is not None:
-            hidden = ~mask
-            if hidden.any():
-                return self._rec_loss_fn(pred[hidden], y[hidden])
+            # Static-shape masked mean-squared error.
+            # We avoid `pred[hidden]` boolean indexing because it produces a
+            # dynamic-shape tensor that defeats torch.compile and forces
+            # recompilation/graph-breaks every step (the visible/hidden voxel
+            # count varies per batch). Instead, multiply by a float mask and
+            # divide by the number of hidden voxels. Promoted to float32 for
+            # the reduction to avoid bf16 accumulator drift on large patches.
+            hidden_f = (~mask).to(pred.dtype)
+            diff = ((pred - y) * hidden_f).float()
+            sse = diff.pow(2).sum()
+            n = hidden_f.float().sum().clamp_min(1.0)
+            return sse / n
 
         return self._rec_loss_fn(pred, y)
 

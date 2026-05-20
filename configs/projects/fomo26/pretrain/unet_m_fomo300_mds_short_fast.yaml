@@ -1,0 +1,61 @@
+# @package _global_
+#
+# "Fast" variant of unet_m_fomo300_mds_short.yaml used to measure the impact
+# of throughput-oriented edits while keeping the SSL recipe equal:
+#   1. static-shape masked loss (code change in self_supervised.py)
+#   2. Torch_Spatial moved from CPU to GPU (new transforms presets)
+#   4. pin_memory=True + prefetch_factor=4 (code change in pretraining.py)
+#   5. torch.set_float32_matmul_precision('high') (code change in pretrain.py)
+#   8. compile_mode: reduce-overhead (overridden below)
+#
+# Everything else is identical to unet_m_fomo300_mds_short.yaml so this can
+# be diffed against job 54150 directly.
+defaults:
+  - /default_pretrain
+  - /model/unet_m@model
+  - /hardware/1gpu12cpu@hardware
+  - _self_
+
+task: PT901_FOMO300_MDS
+root: fomo26
+stem: pretrain
+
+checkpoint_run_id:
+
+data:
+  train_split: split_mihir_90_10
+  fold: 0
+
+training:
+  batch_size: 2
+  accumulate_grad_batches: 1
+  patch_size: [96, 96, 96]
+  mask_ratio: 0.6
+  max_samples: 8192
+  steps_per_epoch: 256
+  val_steps_per_epoch: 16
+  warmup_ratio: 0.1
+  check_val_every_n_epoch: 1
+  rec_loss_masked_only: true
+
+model:
+  ckpt_every_n_epoch: 1
+  use_skip_connections: false
+
+hardware:
+  compile_mode: reduce-overhead
+
+transforms:
+  cpu_tr_transforms: pretrain_CPU_train_transforms_lite
+  gpu_tr_transforms: pretrain_GPU_train_transforms_with_spatial
+
+logger:
+  wandb_logging: true
+  mlflow_logging: false
+  log_every_n_steps: 10
+  log_images_every_n_epoch: 1
+
+profiler:
+  enabled: true
+  profile_every_n_steps: 50
+  warmup_steps: 5

@@ -1,6 +1,7 @@
 import hydra
 import lightning as pl
 import random
+import torch
 from asparagus.functional.versioning import generate_unused_run_id
 from asparagus.modules.hydra.plugins.searchpath_plugins import PretrainSearchpathPlugin
 from asparagus.paths import get_config_path
@@ -14,6 +15,11 @@ from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint, TQ
 from omegaconf import DictConfig, OmegaConf
 
 load_dotenv()
+
+# Enables TF32 matmul on Ampere+/H100 GPUs in fp32 paths and stops Lightning
+# from warning about it. Cheap ~5-10% throughput on conv-heavy workloads under
+# bf16-mixed precision.
+torch.set_float32_matmul_precision("high")
 
 OmegaConf.register_new_resolver("random", lambda min, max: random.randint(min, max))
 OmegaConf.register_new_resolver("version", lambda: generate_unused_run_id(), use_cache=True)
@@ -78,11 +84,13 @@ def main(cfg: DictConfig) -> None:
         cfg.transforms.masking,
         ndim=len(cfg.training.patch_size),
         mask_ratio=cfg.training.mask_ratio,
+        patch_size=tuple(cfg.training.patch_size),
     )
     gpu_val_transforms = instantiate(
         cfg.transforms._gpu_val_transforms,
         cfg.transforms.masking,
         mask_ratio=cfg.training.mask_ratio,
+        patch_size=tuple(cfg.training.patch_size),
     )
 
     model = instantiate(

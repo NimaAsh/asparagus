@@ -1,7 +1,9 @@
 from .pretrain import (
     CPU_train_transforms as pretrain_CPU_train_transforms,
+    CPU_train_transforms_lite as pretrain_CPU_train_transforms_lite,
     CPU_val_transforms as pretrain_CPU_val_transforms,
     GPU_train_transforms as pretrain_GPU_train_transforms,
+    GPU_train_transforms_with_spatial as pretrain_GPU_train_transforms_with_spatial,
     GPU_val_transforms as pretrain_GPU_val_transforms,
 )
 from .train import (
@@ -27,7 +29,9 @@ __all__ = [
     "CPU_seg_val_transforms",
     "GPU_all_train_transforms",
     "pretrain_CPU_train_transforms",
+    "pretrain_CPU_train_transforms_lite",
     "pretrain_CPU_val_transforms",
     "pretrain_GPU_train_transforms",
+    "pretrain_GPU_train_transforms_with_spatial",
     "pretrain_GPU_val_transforms",
 ]

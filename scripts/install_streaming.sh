@@ -216,9 +216,21 @@ import fsspec  # noqa: F401
 import snappy
 import brotli
 import zstd
-assert snappy.compress(b"") == b"", "snappy.compress(b'') must roundtrip"
-assert brotli.compress(b"x") and len(brotli.compress(b"x")) > 0, "brotli broken"
-assert zstd.compress(b"x"), "zstd broken"
+
+# fsspec.compression probes these with `snappy.compress(b"")` etc. and only
+# catches (ImportError, NameError, AttributeError). We assert the call
+# succeeds at all (returns some bytes) -- empty-input returns are
+# implementation-defined (snappy returns a length-prefix varint, zstd
+# returns a frame header). Then sanity-check a real round-trip on a small
+# payload.
+assert isinstance(snappy.compress(b""), bytes), "snappy.compress raised"
+assert isinstance(brotli.compress(b""), bytes), "brotli.compress raised"
+assert isinstance(zstd.compress(b""), bytes), "zstd.compress raised"
+
+payload = b"the quick brown fox jumps over the lazy dog"
+assert snappy.decompress(snappy.compress(payload)) == payload, "snappy roundtrip broken"
+assert brotli.decompress(brotli.compress(payload)) == payload, "brotli roundtrip broken"
+assert zstd.decompress(zstd.compress(payload)) == payload, "zstd roundtrip broken"
 
 from streaming import StreamingDataset
 import streaming

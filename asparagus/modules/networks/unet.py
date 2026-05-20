@@ -25,6 +25,7 @@ def unet_b(
     output_channels: int = 1,
     dimensions: str = "3D",
     deep_supervision: bool = False,
+    use_skip_connections: bool = True,
 ):
     return UNet(
         input_channels=input_channels,
@@ -32,6 +33,7 @@ def unet_b(
         dimensions=dimensions,
         starting_filters=32,
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )
 
 
@@ -40,6 +42,7 @@ def unet_m(
     output_channels: int = 1,
     dimensions: str = "3D",
     deep_supervision: bool = False,
+    use_skip_connections: bool = True,
 ):
     return UNet(
         input_channels=input_channels,
@@ -47,6 +50,7 @@ def unet_m(
         dimensions=dimensions,
         starting_filters=64,
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )
 
 

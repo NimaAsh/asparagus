@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - /default_pretrain
-  - /model/unet_b_lw_dec@model
+  - /model/resenc_unet_l@model
   - /hardware/1gpu12cpu@hardware
   - _self_
 

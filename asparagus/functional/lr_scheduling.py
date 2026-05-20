@@ -90,7 +90,25 @@ def simple_warmup_cosine_decay_schedule(
         max_steps = max_epochs * steps_per_epoch
 
     total_warmup_steps = int(warmup_epochs * steps_per_epoch)
-    cosine_steps = int(cosine_period_ratio * (max_steps - total_warmup_steps))
+    if max_steps <= 1:
+        print("Using constant learning rate schedule for a single-step run")
+        return LambdaLR(optimizer, lr_lambda=lambda _step: 1.0)
+
+    if total_warmup_steps <= 0:
+        cosine_steps = max(1, int(cosine_period_ratio * max_steps))
+        print("Using no warmup")
+        print(f"Cosine decay for {cosine_steps} steps")
+        return CosineAnnealingLR(optimizer, T_max=cosine_steps)
+
+    if total_warmup_steps >= max_steps:
+        original_warmup_steps = total_warmup_steps
+        total_warmup_steps = max_steps - 1
+        print(
+            f"Clipping warmup from {original_warmup_steps} to {total_warmup_steps} "
+            "steps so cosine decay has at least one step"
+        )
+
+    cosine_steps = max(1, int(cosine_period_ratio * (max_steps - total_warmup_steps)))
 
     cosine_scheduler = CosineAnnealingLR(optimizer, T_max=cosine_steps)
     warmup_scheduler = LinearLR(
@@ -101,8 +119,6 @@ def simple_warmup_cosine_decay_schedule(
 
     print(f"Using warmup for {warmup_epochs} epochs ({total_warmup_steps} steps)")
     print(f"Cosine decay for {cosine_steps} steps after warmup")
-    assert total_warmup_steps > 0, "Warmup steps must be greater than 0 for warmup schedule."
-    assert cosine_steps > 0, "Cosine steps must be greater than 0 for warmup cosine decay schedule."
 
     return SequentialLR(
         optimizer,

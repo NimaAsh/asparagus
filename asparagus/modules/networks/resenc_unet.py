@@ -124,6 +124,7 @@ def resenc_unet_s(
     input_channels,
     output_channels,
     deep_supervision=False,
+    use_skip_connections=True,
 ):
     return ResidualEncoderUNet(
         dimensions=dimensions,
@@ -135,6 +136,7 @@ def resenc_unet_s(
         n_blocks_per_stage=(2, 2, 2, 2, 2, 2),
         n_conv_per_stage_decoder=(1, 1, 1, 1, 1),
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )
 
 
@@ -192,6 +194,7 @@ def resenc_unet_l(
     input_channels,
     output_channels,
     deep_supervision=False,
+    use_skip_connections=True,
 ):
     return ResidualEncoderUNet(
         dimensions=dimensions,
@@ -203,6 +206,7 @@ def resenc_unet_l(
         n_blocks_per_stage=(1, 3, 4, 6, 6, 6),
         n_conv_per_stage_decoder=(1, 1, 1, 1, 1),
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )
 
 
@@ -235,6 +239,7 @@ def resenc_unet_h(
     input_channels,
     output_channels,
     deep_supervision=False,
+    use_skip_connections=True,
 ):
     return ResidualEncoderUNet(
         dimensions=dimensions,
@@ -246,6 +251,7 @@ def resenc_unet_h(
         n_blocks_per_stage=(1, 3, 4, 6, 8, 8),
         n_conv_per_stage_decoder=(1, 1, 1, 1, 1),
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )
 
 
@@ -256,6 +262,7 @@ def resenc_unet_g(
     input_channels,
     output_channels,
     deep_supervision=False,
+    use_skip_connections=True,
 ):
     return ResidualEncoderUNet(
         dimensions=dimensions,
@@ -267,4 +274,5 @@ def resenc_unet_g(
         n_blocks_per_stage=(1, 3, 4, 6, 8, 8),
         n_conv_per_stage_decoder=(1, 1, 1, 1, 1),
         deep_supervision=deep_supervision,
+        use_skip_connections=use_skip_connections,
     )

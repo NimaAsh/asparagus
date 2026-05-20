@@ -108,10 +108,16 @@ run_asparagus() {
 
   if command -v uv >/dev/null 2>&1; then
     export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PROJECT_DIR/venvs/asparagus}"
+    # `uv run` syncs the env to the lockfile by default. That removes anything
+    # we layered on top via `uv pip install --no-deps` (e.g. mosaicml-streaming
+    # for the MDS data module), so we pin `--no-sync` whenever ASPARAGUS_SKIP_INSTALL=1.
+    UV_RUN_ARGS=()
     if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" != "1" ]]; then
       uv sync --group dcai --extra extras
+    else
+      UV_RUN_ARGS+=("--no-sync")
     fi
-    uv run asp_pretrain --config-name "$CONFIG_NAME" "$@"
+    uv run "${UV_RUN_ARGS[@]}" asp_pretrain --config-name "$CONFIG_NAME" "$@"
   else
     if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" != "1" ]]; then
       python -m pip install -e ".[extras]"

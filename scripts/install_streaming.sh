@@ -30,7 +30,9 @@ uv pip install --no-deps mosaicml-streaming
 uv pip install --no-deps xxhash zstandard
 
 echo "==> Smoke test"
-uv run python - <<'PY'
+# Use the venv's python directly. `uv run` would otherwise re-sync the env to
+# the lockfile state, which removes the `--no-deps` packages we just put in.
+"$VENV/bin/python" - <<'PY'
 from streaming import StreamingDataset
 print("OK: streaming.StreamingDataset is importable")
 PY

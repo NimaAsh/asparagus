@@ -41,14 +41,28 @@ echo "==> Target python: $VENV_PY"
 uv pip install --python "$VENV_PY" --no-deps mosaicml-streaming
 # Real runtime deps of `streaming.base.*` that have no version conflicts with
 # asparagus' pins (these are pure-python or have manylinux wheels with no
-# system-library requirement):
-#   xxhash     - shard hash validation
-#   zstandard  - kept for parity (not the same module as `zstd` below; we stub
-#                that one because `zstd` PyPI package is the legacy binding
-#                streaming.base.compression eagerly imports).
-#   catalogue  - dataset registry used by streaming.base.registry_utils
-#   filelock   - shard caching lock (almost always already installed by huggingface-hub)
-uv pip install --python "$VENV_PY" --no-deps xxhash zstandard catalogue filelock
+# system-library requirement, including bundled native libs for the C
+# extensions). We install REAL packages here rather than stubbing because
+# fsspec (a lightning transitive dep) probes the compression modules at
+# import time with `snappy.compress(b"")` etc., and only catches
+# (ImportError, NameError, AttributeError). A stub that raises anything else
+# (e.g. NotImplementedError) crashes the whole lightning import chain.
+#
+#   xxhash         - shard hash validation
+#   zstandard      - newer zstd binding (we keep both because some tools
+#                    pin to one or the other; both ship pure manylinux wheels).
+#   zstd           - legacy zstd binding eagerly imported by
+#                    streaming.base.compression.
+#   Brotli         - eagerly imported by streaming.base.compression and
+#                    probed by fsspec.compression.
+#   python-snappy  - eagerly imported by streaming.base.compression and
+#                    probed by fsspec.compression. Wheel bundles libsnappy
+#                    so no system libsnappy-dev needed.
+#   catalogue      - dataset registry used by streaming.base.registry_utils.
+#   filelock       - shard caching lock (usually already installed by
+#                    huggingface-hub but explicit-is-better).
+uv pip install --python "$VENV_PY" --no-deps \
+    xxhash zstandard zstd Brotli python-snappy catalogue filelock
 
 # `streaming.base.dataloader` does an eager top-level
 # `from transformers.feature_extraction_utils import BatchFeature`, so the
@@ -126,38 +140,30 @@ PY
 
 echo "    Wrote shim to $TRANSFORMERS_DIR (BatchFeature + BatchEncoding)"
 
-# `streaming/base/compression.py` does `import brotli; import snappy; import zstd`
-# at module load time. We never write or decompress shards with these
-# algorithms (our FOMO300 shards are uncompressed), so installing real
-# packages just to satisfy the imports is wasteful and `python-snappy`
-# additionally needs a system libsnappy-dev that isn't on every node.
-# Stub them out as no-op modules with compress/decompress functions that
-# raise if anyone actually calls them.
-echo "==> Writing compression shims (brotli, snappy, zstd)"
-for mod in brotli snappy zstd; do
-    cat > "$SITE/${mod}.py" <<PY
-"""Stub for the '$mod' module so streaming.base.compression can import.
-
-We only read uncompressed MDS shards; this module's compress()/decompress()
-are never called by our code path. They raise to make accidental use loud.
-"""
-
-
-def compress(data, *args, **kwargs):
-    raise NotImplementedError(
-        "$mod is a stubbed module in this env (no real compression library). "
-        "Install the real package if you need shard (de)compression."
-    )
-
-
-def decompress(data, *args, **kwargs):
-    raise NotImplementedError(
-        "$mod is a stubbed module in this env (no real compression library). "
-        "Install the real package if you need shard (de)compression."
-    )
-PY
+# Earlier versions of this script wrote stub `brotli.py`, `snappy.py`, and
+# `zstd.py` files into site-packages. fsspec's compression module probes
+# these at import time with `snappy.compress(b"")` and only catches
+# (ImportError, NameError, AttributeError), so a stub that raised
+# NotImplementedError crashed the whole lightning import chain. We now
+# install the real packages above; clean up any leftover stubs so the real
+# package's module wins resolution.
+echo "==> Cleaning up any pre-existing brotli/snappy/zstd stubs"
+for stub in "$SITE/brotli.py" "$SITE/snappy.py" "$SITE/zstd.py"; do
+    if [[ -f "$stub" ]]; then
+        # Detect our stub by its docstring. Don't delete a legitimate
+        # single-file module that pip put there.
+        if grep -q "Stub for the" "$stub" 2>/dev/null; then
+            rm -f "$stub"
+            echo "    Removed stub: $stub"
+        fi
+    fi
 done
-echo "    Wrote $SITE/{brotli,snappy,zstd}.py"
+# Also clear cached bytecode for the stubs so the next import resolves the
+# real packages cleanly.
+rm -rf \
+    "$SITE/__pycache__/brotli.cpython-"*".pyc" \
+    "$SITE/__pycache__/snappy.cpython-"*".pyc" \
+    "$SITE/__pycache__/zstd.cpython-"*".pyc" 2>/dev/null || true
 
 # `streaming/__init__.py` eagerly imports streaming.multimodal, streaming.text,
 # streaming.vision. text.c4 imports `transformers.models.auto.tokenization_auto`
@@ -198,8 +204,24 @@ fi
 
 echo "==> Smoke test"
 "$VENV_PY" - <<'PY'
+# Order matters: lightning -> fsspec probes the compression modules
+# (snappy.compress(b""), zstd.compress(b"")). If our compression installs
+# regressed (e.g. left a stub behind), the lightning import below will fail
+# the same way the SLURM job did. We exercise that path here so the script
+# fails loudly on a login node instead of silently in a job.
+import lightning  # noqa: F401
+import fsspec  # noqa: F401
+import snappy
+import brotli
+import zstd
+assert snappy.compress(b"") == b"", "snappy.compress(b'') must roundtrip"
+assert brotli.compress(b"x") and len(brotli.compress(b"x")) > 0, "brotli broken"
+assert zstd.compress(b"x"), "zstd broken"
+
 from streaming import StreamingDataset
 import streaming
+print("OK: lightning + fsspec import cleanly")
+print("OK: snappy/brotli/zstd compress() are real")
 print("OK: streaming.StreamingDataset is importable")
 print("streaming.__file__:", streaming.__file__)
 PY

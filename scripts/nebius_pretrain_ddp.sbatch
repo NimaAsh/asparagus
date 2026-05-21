@@ -16,12 +16,18 @@
 #      hydra resolver returns the same value (otherwise each rank picks a
 #      random unused int and ends up in a different output dir).
 #
+# NOTE: We intentionally do NOT set --gpus-per-task. With SLURM cgroup GPU
+# pinning, --gpus-per-task=1 makes each task see exactly one CUDA device,
+# but Lightning's accelerator validates `devices=8` against
+# torch.cuda.device_count() *inside* the per-rank process and fails with
+# "You requested gpu: [0..7] But your machine only has: [0]". Leaving the
+# GPUs at the job level (`--gres=gpu:8`) lets all 8 ranks see all 8 GPUs,
+# and Lightning's DDPStrategy picks each rank's device from LOCAL_RANK.
 #SBATCH --job-name=asp-pretrain-ddp
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:8
-#SBATCH --gpus-per-task=1
 #SBATCH --time=00:45:00
 #SBATCH --partition=n
 #SBATCH --account=training
@@ -54,6 +60,15 @@ export UV_CACHE_DIR="${UV_CACHE_DIR:-$PROJECT_DIR/uv-cache}"
 # in asparagus/pipeline/run/pretrain.py.
 export ASPARAGUS_RUN_ID="${SLURM_JOB_ID:-local}"
 
+# Ensure every rank sees every allocated GPU. Lightning's DDPStrategy
+# selects the rank's actual device via LOCAL_RANK; if cgroup pinning
+# restricts visibility to one GPU per task, the accelerator parse step
+# fails before DDP setup. Forcing CUDA_VISIBLE_DEVICES here is a no-op on
+# unconstrained clusters and the explicit fix on constrained ones.
+GPUS_ON_NODE="${SLURM_GPUS_ON_NODE:-8}"
+export CUDA_VISIBLE_DEVICES="$(python3 -c "print(','.join(str(i) for i in range(${GPUS_ON_NODE})))")"
+echo "CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
+
 mkdir -p \
   "$ASPARAGUS_DATA" \
   "$ASPARAGUS_MODELS" \
@@ -66,7 +81,7 @@ echo "Job id: ${SLURM_JOB_ID:-local}"
 echo "Node list: ${SLURM_JOB_NODELIST:-local}"
 echo "Tasks per node: ${SLURM_NTASKS_PER_NODE:-1}"
 echo "CPUs per task: ${SLURM_CPUS_PER_TASK:-?}"
-echo "GPUs per task: ${SLURM_GPUS_PER_TASK:-?}"
+echo "GPUs (job): ${SLURM_GPUS_ON_NODE:-?}"
 echo "Config: $CONFIG_NAME"
 echo "Repo: $REPO_DIR"
 echo "Project dir: $PROJECT_DIR"
@@ -144,10 +159,13 @@ cd "$REPO_DIR"
 
 # --kill-on-bad-exit=1: if any rank dies the whole step is torn down quickly
 # instead of leaving 7 ranks hanging on collective ops.
+# --gpu-bind=none: disables srun-level GPU binding so CUDA_VISIBLE_DEVICES
+# (set above to all 8) survives into each task; Lightning then picks the
+# right device from LOCAL_RANK.
 if command -v uv >/dev/null 2>&1; then
-  srun --kill-on-bad-exit=1 \
+  srun --kill-on-bad-exit=1 --gpu-bind=none \
     uv run asp_pretrain --config-name "$CONFIG_NAME" "$@"
 else
-  srun --kill-on-bad-exit=1 \
+  srun --kill-on-bad-exit=1 --gpu-bind=none \
     asp_pretrain --config-name "$CONFIG_NAME" "$@"
 fi

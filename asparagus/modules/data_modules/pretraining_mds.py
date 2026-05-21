@@ -16,6 +16,29 @@ from torchvision.transforms import Compose
 logger = logging.getLogger(__name__)
 
 
+def _slurm_tasks_per_node() -> Optional[str]:
+    value = os.environ.get("SLURM_NTASKS_PER_NODE")
+    if not value:
+        return None
+    # SLURM may format this as "8" or "8(x2)".
+    return value.split("(", 1)[0]
+
+
+def _normalize_distributed_env() -> None:
+    """Expose SLURM rank metadata under the env names streaming expects."""
+
+    mappings = {
+        "RANK": os.environ.get("SLURM_PROCID"),
+        "WORLD_SIZE": os.environ.get("SLURM_NTASKS"),
+        "LOCAL_RANK": os.environ.get("SLURM_LOCALID"),
+        "LOCAL_WORLD_SIZE": _slurm_tasks_per_node(),
+        "NODE_RANK": os.environ.get("SLURM_NODEID"),
+    }
+    for key, value in mappings.items():
+        if value and not os.environ.get(key):
+            os.environ[key] = value
+
+
 def _import_streaming():
     try:
         from streaming import StreamingDataset
@@ -197,6 +220,8 @@ class MDSPretrainDataModule(pl.LightningDataModule):
         num_samples: Optional[int] = None,
     ):
         super().__init__()
+        _normalize_distributed_env()
+
         if mds_root is None:
             raise ValueError(
                 "MDSPretrainDataModule requires `mds_root`. Set "

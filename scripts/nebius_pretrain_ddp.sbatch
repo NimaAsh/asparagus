@@ -165,20 +165,58 @@ start_telemetry
 
 cd "$REPO_DIR"
 
+cleanup_streaming_shm() {
+  if [[ "${ASPARAGUS_CLEAN_STREAMING_SHM:-1}" != "1" ]]; then
+    return
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "Cleaning stale mosaicml-streaming shared memory on allocated node"
+  CLEAN_RUN_ARGS=()
+  if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" == "1" ]]; then
+    CLEAN_RUN_ARGS+=("--no-sync")
+  fi
+
+  srun --ntasks=1 --nodes=1 --kill-on-bad-exit=1 --gpu-bind=none \
+    uv run "${CLEAN_RUN_ARGS[@]}" python -c \
+      'from streaming.base.util import clean_stale_shared_memory; clean_stale_shared_memory()' || true
+}
+
+run_ddp_rank() {
+  # MosaicML Streaming relies on torchrun-style rank environment variables
+  # for local-leader election in its shared-memory setup. SLURM exposes the
+  # same information under SLURM_* names; Lightning understands those, but
+  # Streaming needs the canonical names as well.
+  export RANK="${SLURM_PROCID:?}"
+  export WORLD_SIZE="${SLURM_NTASKS:?}"
+  export LOCAL_RANK="${SLURM_LOCALID:?}"
+  LOCAL_WORLD_SIZE_VALUE="${SLURM_NTASKS_PER_NODE:-${SLURM_NTASKS:-1}}"
+  LOCAL_WORLD_SIZE_VALUE="${LOCAL_WORLD_SIZE_VALUE%%(*}"
+  export LOCAL_WORLD_SIZE="$LOCAL_WORLD_SIZE_VALUE"
+  export NODE_RANK="${SLURM_NODEID:-0}"
+
+  if command -v uv >/dev/null 2>&1; then
+    if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" == "1" ]]; then
+      uv run --no-sync asp_pretrain --config-name "$CONFIG_NAME" "$@"
+    else
+      uv run asp_pretrain --config-name "$CONFIG_NAME" "$@"
+    fi
+  else
+    asp_pretrain --config-name "$CONFIG_NAME" "$@"
+  fi
+}
+
+export CONFIG_NAME
+export -f run_ddp_rank
+
+cleanup_streaming_shm
+
 # --kill-on-bad-exit=1: if any rank dies the whole step is torn down quickly
 # instead of leaving 7 ranks hanging on collective ops.
 # --gpu-bind=none: disables srun-level GPU binding so CUDA_VISIBLE_DEVICES
 # (set above to all 8) survives into each task; Lightning then picks the
 # right device from LOCAL_RANK.
-if command -v uv >/dev/null 2>&1; then
-  UV_RUN_ARGS=()
-  if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" == "1" ]]; then
-    # Keep manually layered packages such as mosaicml-streaming.
-    UV_RUN_ARGS+=("--no-sync")
-  fi
-  srun --kill-on-bad-exit=1 --gpu-bind=none \
-    uv run "${UV_RUN_ARGS[@]}" asp_pretrain --config-name "$CONFIG_NAME" "$@"
-else
-  srun --kill-on-bad-exit=1 --gpu-bind=none \
-    asp_pretrain --config-name "$CONFIG_NAME" "$@"
-fi
+srun --kill-on-bad-exit=1 --gpu-bind=none \
+  bash -lc 'run_ddp_rank "$@"' bash "$@"

@@ -1,5 +1,6 @@
 import hydra
 import lightning as pl
+import os
 import random
 import torch
 from asparagus.functional.versioning import generate_unused_run_id
@@ -21,8 +22,22 @@ load_dotenv()
 # bf16-mixed precision.
 torch.set_float32_matmul_precision("high")
 
+
+def _resolve_version() -> int:
+    # Allow the launcher (e.g. an SLURM sbatch that uses srun to spawn one
+    # process per GPU) to pin the run_id via env var. This is required for
+    # multi-process DDP: without it, each rank calls generate_unused_run_id()
+    # independently and ends up in a different hydra output dir, which kills
+    # checkpointing, wandb logging, and the run-id-based reporting we do
+    # downstream. When unset we keep the historical behaviour.
+    env_run_id = os.environ.get("ASPARAGUS_RUN_ID", "").strip()
+    if env_run_id:
+        return int(env_run_id)
+    return generate_unused_run_id()
+
+
 OmegaConf.register_new_resolver("random", lambda min, max: random.randint(min, max))
-OmegaConf.register_new_resolver("version", lambda: generate_unused_run_id(), use_cache=True)
+OmegaConf.register_new_resolver("version", _resolve_version, use_cache=True)
 OmegaConf.register_new_resolver("eval", eval)
 Plugins.instance().register(PretrainSearchpathPlugin)
 

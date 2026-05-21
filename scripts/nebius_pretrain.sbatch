@@ -27,6 +27,10 @@ fi
 REPO_DIR="${REPO_DIR:-$PWD}"
 PROJECT_DIR="${PROJECT_DIR:-/data/$USER/asparagus}"
 
+# Prefer the checkout this job was submitted from over any stale editable
+# install that may point at a different worktree.
+export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+
 export ASPARAGUS_CONFIGS="${ASPARAGUS_CONFIGS:-$REPO_DIR/configs}"
 export ASPARAGUS_DATA="${ASPARAGUS_DATA:-$PROJECT_DIR/data}"
 export ASPARAGUS_MODELS="${ASPARAGUS_MODELS:-$PROJECT_DIR/models}"
@@ -108,10 +112,14 @@ run_asparagus() {
 
   if command -v uv >/dev/null 2>&1; then
     export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$PROJECT_DIR/venvs/asparagus}"
+    UV_RUN_ARGS=()
     if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" != "1" ]]; then
       uv sync --group dcai --extra extras
+    else
+      # Keep manually layered packages such as mosaicml-streaming.
+      UV_RUN_ARGS+=("--no-sync")
     fi
-    uv run asp_pretrain --config-name "$CONFIG_NAME" "$@"
+    uv run "${UV_RUN_ARGS[@]}" asp_pretrain --config-name "$CONFIG_NAME" "$@"
   else
     if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" != "1" ]]; then
       python -m pip install -e ".[extras]"

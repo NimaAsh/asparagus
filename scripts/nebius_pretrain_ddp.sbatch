@@ -52,6 +52,10 @@ fi
 REPO_DIR="${REPO_DIR:-$PWD}"
 PROJECT_DIR="${PROJECT_DIR:-/data/$USER/asparagus}"
 
+# Prefer the checkout this job was submitted from over any stale editable
+# install that may point at a different worktree.
+export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+
 export ASPARAGUS_CONFIGS="${ASPARAGUS_CONFIGS:-$REPO_DIR/configs}"
 export ASPARAGUS_DATA="${ASPARAGUS_DATA:-$PROJECT_DIR/data}"
 export ASPARAGUS_MODELS="${ASPARAGUS_MODELS:-$PROJECT_DIR/models}"
@@ -167,8 +171,13 @@ cd "$REPO_DIR"
 # (set above to all 8) survives into each task; Lightning then picks the
 # right device from LOCAL_RANK.
 if command -v uv >/dev/null 2>&1; then
+  UV_RUN_ARGS=()
+  if [[ "${ASPARAGUS_SKIP_INSTALL:-0}" == "1" ]]; then
+    # Keep manually layered packages such as mosaicml-streaming.
+    UV_RUN_ARGS+=("--no-sync")
+  fi
   srun --kill-on-bad-exit=1 --gpu-bind=none \
-    uv run asp_pretrain --config-name "$CONFIG_NAME" "$@"
+    uv run "${UV_RUN_ARGS[@]}" asp_pretrain --config-name "$CONFIG_NAME" "$@"
 else
   srun --kill-on-bad-exit=1 --gpu-bind=none \
     asp_pretrain --config-name "$CONFIG_NAME" "$@"

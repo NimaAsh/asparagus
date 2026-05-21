@@ -56,6 +56,9 @@ extras = [
     "timm<=1.0.14",
     "gardening_tools[extras]>=0.1.1",
 ]
+# `mosaicml-streaming` is not listed as a normal extra because its dependency
+# pins conflict with the fast-pretrain environment. Install the local-MDS
+# reader layer after syncing the uv env via `bash scripts/install_streaming.sh`.
 test = [
     "ruff>=0.14.8",
     "pytest>=9.0.1"

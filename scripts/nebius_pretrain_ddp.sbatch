@@ -28,7 +28,11 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:8
-#SBATCH --time=00:45:00
+# Multi-GPU runs do not always achieve linear scaling on a data-bound
+# workload, so leave a generous wall budget by default. AGENTS.md sanctions
+# `--time=infinite` for training jobs because the Nebius nodes are reserved.
+# Pass `--time=...` on the sbatch CLI when you want a shorter cap.
+#SBATCH --time=infinite
 #SBATCH --partition=n
 #SBATCH --account=training
 #SBATCH --qos=normal

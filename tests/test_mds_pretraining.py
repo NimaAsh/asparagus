@@ -6,6 +6,7 @@ import numpy as np
 
 class FakeStreamingDataset:
     instances = []
+    readonly_images = False
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -13,7 +14,10 @@ class FakeStreamingDataset:
         FakeStreamingDataset.instances.append(self)
 
     def __getitem__(self, sample_id):
-        return {"image": np.zeros((2, 3, 4), dtype=np.float32), "source_id": int(sample_id)}
+        image = np.zeros((2, 3, 4), dtype=np.float32)
+        if FakeStreamingDataset.readonly_images:
+            image.setflags(write=False)
+        return {"image": image, "source_id": int(sample_id)}
 
     def __iter__(self):
         for sample_id in (5, 42):
@@ -31,6 +35,7 @@ def install_fake_streaming(monkeypatch):
     module.Stream = FakeStream
     monkeypatch.setitem(sys.modules, "streaming", module)
     FakeStreamingDataset.instances.clear()
+    FakeStreamingDataset.readonly_images = False
 
 
 def test_mds_dataset_passes_streaming_partition_knobs(monkeypatch):
@@ -92,3 +97,26 @@ def test_mds_dataset_preserves_global_sample_id_and_transforms_once(monkeypatch)
     assert row["image"].shape == (1, 2, 3, 4)
     assert row["transforms_applied"] == {"fake": 1}
     assert calls == [5]
+
+
+def test_mds_dataset_copies_readonly_numpy_images(monkeypatch, recwarn):
+    install_fake_streaming(monkeypatch)
+    FakeStreamingDataset.readonly_images = True
+
+    from asparagus.modules.data_modules.pretraining_mds import MDSPretrainDataModule
+
+    dm = MDSPretrainDataModule(
+        batch_size=2,
+        num_workers=0,
+        mds_root="/mds",
+        train_transforms=None,
+        val_transforms=None,
+        num_canonical_nodes=1,
+        assert_disjoint_batches=0,
+    )
+    dm.setup("fit")
+
+    row = next(iter(dm.train_dataset))
+
+    assert row["image"].is_contiguous()
+    assert not any("not writable" in str(warning.message) for warning in recwarn)

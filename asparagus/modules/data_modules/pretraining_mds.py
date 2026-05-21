@@ -165,7 +165,10 @@ def _build_streaming_dataset_class():
 
             image = sample["image"]
             if not isinstance(image, torch.Tensor):
-                image = torch.as_tensor(np.asarray(image))
+                image_array = np.asarray(image)
+                if not image_array.flags.writeable:
+                    image_array = np.array(image_array, copy=True)
+                image = torch.as_tensor(image_array)
             if image.dtype != torch.float32:
                 image = image.float()
             if image.ndim == 3:

@@ -146,11 +146,15 @@ class SelfSupervisedModule(BaseModule):
 
     def _rec_loss(self, pred, y, mask=None):
         if mask is not None:
-            y_masked = y.clone()
-            pred_masked = pred.clone()
-            y_masked[~mask] = 0
-            pred_masked[~mask] = 0
-            return self._rec_loss_fn(pred_masked, y_masked)
+            # Convention (see networks/primus.py and functional/metrics): mask==True marks
+            # the visible/kept voxels, mask==False marks the masked-out voxels the model must
+            # reconstruct. The MAE objective is the mean squared error over the masked voxels
+            # only, so we select ~mask and normalize by the number of masked elements (not the
+            # full-volume mean, which would zero-dilute the loss by the visible fraction).
+            masked = (~mask).to(pred.dtype)
+            sq_err = (pred - y) ** 2 * masked
+            denom = masked.expand_as(sq_err).sum().clamp_min(1.0)
+            return sq_err.sum() / denom
 
         return self._rec_loss_fn(pred, y)
 
